@@ -125,41 +125,6 @@ async def recieve_wpp_message(
         return JSONResponse("Erro interno do servidor", status_code=500)
 
 
-@app.get("/buffer/status/{phone}")
-async def get_buffer_status(phone: str):
-    """Get buffer status for a specific phone number."""
-    try:
-        buffer = get_message_buffer()
-        
-        status = {
-            "phone": phone,
-            "buffer_size": buffer.get_buffer_size(phone),
-            "is_processing": buffer.is_processing(phone)
-        }
-        
-        return JSONResponse(status, status_code=200)
-    except Exception as e:
-        logger.error(f"Error getting buffer status: {e}")
-        return JSONResponse({"error": "Internal server error"}, status_code=500)
-
-
-@app.get("/buffer/stats")
-async def get_buffer_stats():
-    """Get overall buffer statistics."""
-    try:
-        buffer = get_message_buffer()
-        
-        stats = {
-            "active_processing_tasks": len(buffer.processing_tasks),
-            "buffer_delay_seconds": buffer.buffer_delay
-        }
-        
-        return JSONResponse(stats, status_code=200)
-    except Exception as e:
-        logger.error(f"Error getting buffer stats: {e}")
-        return JSONResponse({"error": "Internal server error"}, status_code=500)
-
-
 async def setup_listener():
     listen = f"localhost:8000"
     token = os.getenv("NGROK_AUTH_TOKEN")
