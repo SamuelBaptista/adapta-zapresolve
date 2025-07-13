@@ -10,9 +10,9 @@ O objetivo é apenas extrair e validar dados (não avançar no fluxo, não forne
 # Etapas
 
 1. **Extração de Dados**  
-   Analise o texto do usuário apresentado em linguagem natural e determine, com raciocínio explícito (passo a passo), quais campos estruturados (ex: 'nome', 'CPF', 'telefone', 'problema', 'sinistro_id', etc.) podem ser extraídos e quais não estão presentes ou estão ambíguos. Comente seu processo de extração antes de avançar para a validação.
+   Analise o texto do usuário apresentado em linguagem natural e determine, com raciocínio explícito (passo a passo), quais campos estruturados (ex: 'nome', 'CPF', 'problema', 'sinistro_id', etc.) podem ser extraídos e quais não estão presentes ou estão ambíguos. Comente seu processo de extração antes de avançar para a validação.
 2. **Validação de Campos**  
-   Para cada campo obrigatório (estático: 'nome', 'CPF', 'telefone', 'problema' — e dinâmico/contextual como 'sinistro'/'protocolo' se relevante):
+    Para cada campo obrigatório (estático: 'nome', 'CPF', 'problema' — e dinâmico/contextual como 'sinistro'/'protocolo' se relevante):
      - O campo foi extraído do texto?  
      - O valor extraído parece válido (formato/completude)?  
      Explique cada decisão de validação, campo a campo.
@@ -45,21 +45,17 @@ Output:
   "reasoning": [
     "Extração: Identifiquei o nome 'Carlos Silva' no texto.",
     "Extração: Localizei CPF '12345678900'.",
-    "Extração: Não encontrei telefone informado explicitamente.",
     "Extração: Mensão a pedido de sinistro em 'Preciso abrir um sinistro'.",
     "Extração: identificador não informado.",
     "Validação: nome presente e adequado.",
     "Validação: CPF presente e adequado.",
-    "Validação: telefone ausente.",
     "Validação: problema presente e válido.",
     "Validação: identificador ausente, necessário neste caso."
   ],
   "validation_status": "follow-up",
-  "mensagem": "Por favor, informe seu telefone de contato e o número do sinistro para prosseguir.",
+  "mensagem": "Por favor, informe  o número do sinistro para prosseguir.",
   "extracted_data": {
     "nome": "Carlos Silva",
-    "CPF": "12345678900",
-    "telefone": "",
     "problema": "abrir um sinistro",
     "identificador": null
   }
@@ -74,12 +70,10 @@ Output:
   "reasoning": [
     "Extração: Nome 'Joana Souza' identificado.",
     "Extração: CPF 98765432100 encontrado.",
-    "Extração: telefone 11988887777 extraído.",
     "Extração: Pedido para atualizar dados identificado como 'problema'.",
     "Extração: identificador 'SN-2033' identificado.",
     "Validação: nome presente e adequado.",
     "Validação: CPF presente e adequado.",
-    "Validação: telefone presente e adequado.",
     "Validação: problema presente e válido.",
     "Validação: identificador presente e válido."
   ],
@@ -88,7 +82,6 @@ Output:
   "extracted_data": {
     "nome": "Joana Souza",
     "CPF": "98765432100",
-    "telefone": "11988887777",
     "problema": "atualizar dados",
     "identificador": "SN-2033"
   }
@@ -102,11 +95,9 @@ Output:
 {
   "reasoning": [
     "Extração: Nome 'Pedro Gomes' localizado.",
-    "Extração: Telefone 21999887766 extraído.",
     "Extração: Não localizei CPF no texto.",
     "Extração: Pedido para cancelar assinatura da Netflix não é relacionado à Porto Seguro.",
     "Validação: nome presente.",
-    "Validação: telefone presente.",
     "Validação: CPF ausente.",
     "Validação: problema não pertinente à Porto Seguro."
   ],
@@ -115,7 +106,6 @@ Output:
   "extracted_data": {
     "nome": "Pedro Gomes",
     "CPF": "",
-    "telefone": "21999887766",
     "problema": "cancelar assinatura da Netflix"
   }
 }

@@ -15,6 +15,7 @@ from wpp.api.wpp_message import WppMessage
 from wpp.memory import RedisManager
 
 from wpp.genai.prompts.step1 import PROMPT
+from wpp.genai.prompts.step2 import PROMPT2
 
 from pydantic import BaseModel
 
@@ -37,6 +38,11 @@ class Step1Response(BaseModel):
     mensagem: str
     extracted_data: ExtractedData
 
+
+class Step2Response(BaseModel):
+    reasoning: list[str]
+    flag: str
+    message: str
 
 
 class UserWppWebhook:
@@ -68,6 +74,8 @@ class UserWppWebhook:
         self.memory = self.cache.get_memory_dict()
 
         self.memory['chat_history'] = self.memory.get('chat_history', [])
+        self.memory['chat_history2'] = self.memory.get('chat_history2', [])
+
         self.memory['step'] = self.memory.get('step', 1)
         
     def __get_text_input(self):
@@ -326,6 +334,70 @@ class UserWppWebhook:
 
         return response
 
+    def __process_step2(self, data: dict | None = None):
+        agent = Agent(
+            model="gpt-4.1",
+            model_type="chat",
+            tools=[self.send_message]
+        )
+
+        history = self.memory.get('chat_history2', [])
+
+        if not history:
+            history = [
+                {
+                    "role": "system",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": PROMPT2
+                        }
+                    ]
+                },               
+            ]
+
+            if data:
+                history.append(
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": str(data)
+                            }
+                        ]
+                    }
+                )
+
+            self.memory['chat_history2'] = history
+
+        task = Task(
+            user=self.user_input['text'],
+            history=history,
+            agent=agent,
+            simple_response=True,
+        )
+
+        response = task.run({
+            "bot_phone": self.memory['bot_phone'],
+            "user_phone": self.memory['user_phone'],
+            "event_from": self.data.phone,
+        })
+
+        logger.info(task.prompt)
+
+        # Handle None response or missing output
+        if not response:
+            return {
+                "type": "message", 
+                "message": "Ocorreu um erro interno. Por favor, tente novamente."
+            }
+
+        self.memory['chat_history2'] = task.prompt
+        self.cache.set_memory_dict(self.memory)
+
+        return response
+
     def _process_wpp_message(self):
         self.__build_memory()
         self.user_input = self.__get_user_input()
@@ -360,16 +432,38 @@ class UserWppWebhook:
 
             if step1_response.get("validation_status") == "ok":
                 self.memory['step'] = 2
+                self.memory['data'] = step1_response.get('extracted_data')
+
+                self.memory['user_phone'] = self.data.phone
+                self.memory['bot_phone'] = "551130039303" # 551130039303, 5519999872145
+
                 self.cache.set_memory_dict(self.memory)
 
+                temp_cache = RedisManager(self.redis_client, self.memory['bot_phone'])
+                temp_cache.set_memory_dict(self.memory)
+
                 self.wpp.send_message(
-                    message="Ok! Estamos processando sua requisição. Por favor, aguarde um momento.",
-                    number=self.data.phone,
+                    message="Oi Porto!",
+                    number=self.memory['bot_phone'],
                 )
 
         if self.memory.get('step') == 2:
-            return {"type": "message", "message": "Vou executar o segundo step"}
+            logger.info(self.memory)
+            _ = self.__process_step2(self.memory['data'])
 
+    def send_message(self, message: str, to: str):
+        """
+        Sends a message to a specified recipient.
+
+        Args:
+            message (str): The message content to send.
+            to (str): The recipient type, can be "user" or "bot".
+        """
+
+        self.wpp.send_message(
+            message=message,
+            number=self.memory['bot_phone'] if to == "bot" else self.memory['user_phone'],
+        )
 
     def process_event(self):
 
