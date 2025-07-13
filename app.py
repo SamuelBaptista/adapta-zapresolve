@@ -10,8 +10,6 @@ from wpp.api.wpp_webhook import UserWppWebhook
 
 from wpp.memory import RedisManager
 
-from wpp.genai.workflows.step1 import step1_workflow
-
 
 app = FastAPI()
 
@@ -37,8 +35,6 @@ async def recieve_wpp_message(
     wpp = WppMessage(wpp_id, wpp_token, wpp_secret)
     data = await request.json()
 
-    print(data)
-
     if data.get('notification') == "REVOKE":
         return JSONResponse("Mensagem processada com sucesso!", status_code=200)
     
@@ -51,7 +47,7 @@ async def recieve_wpp_message(
         return JSONResponse("Group messages are not supported", status_code=400)
     
     hook = UserWppWebhook(data, redis_client, wpp)
-    hook.process_event(step1_workflow)
+    hook.process_event()
 
     redis_manager.redis.set(message_id, "1", ex=60)
     return JSONResponse("Mensagem processada com sucesso!", status_code=200)

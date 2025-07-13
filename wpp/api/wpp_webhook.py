@@ -3,21 +3,41 @@ import pdf2image
 import io
 import base64
 import logging
+from typing import Optional
 
 from PIL import Image
 
 from repenseai.genai.agent import Agent
-
 from repenseai.genai.tasks.api import Task
-from repenseai.genai.tasks.workflow import Workflow
 
 from wpp.schemas.wpp_webhook import WppPayload
 from wpp.api.wpp_message import WppMessage
 from wpp.memory import RedisManager
 
+from wpp.genai.prompts.step1 import PROMPT
+
+from pydantic import BaseModel
+
 import redis
 
 logger = logging.getLogger(__name__)
+
+
+class ExtractedData(BaseModel):
+    nome: str
+    CPF: str
+    telefone: str
+    problema: str
+    identificador: Optional[str] = None
+
+
+class Step1Response(BaseModel):
+    reasoning: list[str]
+    validation_status: str
+    mensagem: str
+    extracted_data: ExtractedData
+
+
 
 class UserWppWebhook:
     def __init__(
@@ -46,6 +66,9 @@ class UserWppWebhook:
     def __build_memory(self):
         self.cache = RedisManager(self.redis_client, self.data.phone)
         self.memory = self.cache.get_memory_dict()
+
+        self.memory['chat_history'] = self.memory.get('chat_history', [])
+        self.memory['step'] = self.memory.get('step', 1)
         
     def __get_text_input(self):
         return {"text": self.data.text.message}
@@ -63,11 +86,11 @@ class UserWppWebhook:
         )
 
         audio_task = Task(
-            selector=audio_selector,
+            agent=audio_selector,
         )
 
         audio = requests.get(self.data.audio.audioUrl).content
-        transcription = audio_task.predict({"audio": audio})
+        transcription = audio_task.run({"audio": audio})
 
         return {
             "text": transcription.get("response"), 
@@ -158,18 +181,13 @@ class UserWppWebhook:
         return input_function()   
 
     def __format_image_history(self):
-
+        # Store image messages as simple text in chat history
+        # The actual image processing happens in real-time, not from history
+        image_caption = self.user_input.get("text", "")
+        
         content = {
             "role": "user",
-            "content": [
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": self.user_input["image"],
-                        "detail": "high",
-                    },
-                }
-            ]
+            "content": f"[Imagem enviada]{': ' + image_caption if image_caption else ''}"
         }
 
         if self.memory.get("chat_history"):
@@ -239,9 +257,79 @@ class UserWppWebhook:
         else:
             return "São suportados apenas documentos em PDF ou imagens"
 
-    def _process_wpp_message(self, workflow: Workflow):
+    def __process_step1(self):
+        agent = Agent(
+            model="gpt-4.1",
+            model_type="chat",
+            json_schema=Step1Response,
+        )
+
+        history = self.memory.get('chat_history', [])
+
+        if not history:
+            history = [
+                {
+                    "role": "system",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": PROMPT
+                        }
+                    ]
+                }
+            ]
+
+            self.memory['chat_history'] = history
+
+        task = Task(
+            user=self.user_input['text'],
+            history=history,
+            agent=agent,
+            simple_response=True,
+        )
+
+        response = task.run()
+        logger.info(task.prompt)
+
+        # Handle None response or missing output
+        if not response:
+            return {
+                "type": "message", 
+                "message": "Ocorreu um erro interno. Por favor, tente novamente."
+            }
+
+        self.memory['chat_history'].append(
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": self.user_input.get('text', '')
+                    }
+                ]
+            },
+        )
+
+        self.memory['chat_history'].append(
+            {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": response.get('mensagem', '')
+                    }
+                ]
+            }
+        )
+
+        self.cache.set_memory_dict(self.memory)
+
+        return response
+
+    def _process_wpp_message(self):
         self.__build_memory()
         self.user_input = self.__get_user_input()
+
         
         if self.message_type == "image":
             self.__format_image_history()
@@ -255,46 +343,35 @@ class UserWppWebhook:
         if not self.user_input.get('text'):
             return None
 
-        self.user_input["redis"] = self.cache
-        self.user_input["full_name"] = self.full_name
-        self.user_input["name"] = self.name
-        self.user_input["phone"] = self.data.phone
+        if self.memory.get('step') == 1:
+            step1_response = self.__process_step1()
+            
+            if step1_response.get("validation_status") == "error":
+                return {
+                    "type": "message", 
+                    "message": "Não foi possível processar a requisição. Por favor, verifique se o assunto está relacionado a Porto Seguro e tente novamente."
+                }
+            
+            if step1_response.get("validation_status") == "follow-up":
+                return {
+                    "type": "message", 
+                    "message": step1_response.get('mensagem', 'Por favor, forneça mais informações.')
+                }
 
-        response = workflow.run(self.user_input)
+            if step1_response.get("validation_status") == "ok":
+                self.memory['step'] = 2
+                self.cache.set_memory_dict(self.memory)
 
-        # Handle None response or missing output
-        if not response or not response.get('output'):
-            return {
-                "type": "message", 
-                "message": "Ocorreu um erro interno. Por favor, tente novamente."
-            }
+                self.wpp.send_message(
+                    message="Ok! Estamos processando sua requisição. Por favor, aguarde um momento.",
+                    number=self.data.phone,
+                )
 
-        output = response['output']
+        if self.memory.get('step') == 2:
+            return {"type": "message", "message": "Vou executar o segundo step"}
 
-        if output.get("validation_status") == "error":
-            return {
-                "type": "message", 
-                "message": "Não foi possível processar a requisição. Por favor, verifique se o assunto está relacionado a Porto Seguro e tente novamente."
-            }
-        
-        if output.get("validation_status") == "follow-up":
-            return {
-                "type": "message", 
-                "message": output.get('mensagem', 'Por favor, forneça mais informações.')
-            }
 
-        if output.get("validation_status") == "ok":
-            return {
-                "type": "message", 
-                "message": "Ok! Estamos processando sua requisição. Por favor, aguarde um momento."
-            }
-        
-        return {
-            "type": "message", 
-            "message": "ERRO!"
-        }
-
-    def process_event(self, workflow: Workflow):
+    def process_event(self):
 
         message_type = {
             "message": self.wpp.send_message,
@@ -303,8 +380,8 @@ class UserWppWebhook:
             "button_action": self.wpp.send_buttons_action,
         }
 
-        response = self._process_wpp_message(workflow)
-        logger.info(response)
+        response = self._process_wpp_message()
+
 
         if response:
             response['number'] = self.data.phone

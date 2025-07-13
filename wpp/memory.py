@@ -21,7 +21,7 @@ class RedisManager:
     This class provides methods to store, retrieve, and manage data in Redis.
     """
 
-    def __init__(self: "RedisManager", redis: Any, memory_id: str) -> None:
+    def __init__(self, redis: Any, memory_id: str) -> None:
         """
         Initialize the Redis manager.
 
@@ -33,7 +33,7 @@ class RedisManager:
         self.id = memory_id
         self.memory_dict = self.redis.hgetall(name=self.id)
 
-    def get_memory_dict(self: "RedisManager") -> dict:
+    def get_memory_dict(self) -> dict:
         """
         Get the memory dictionary from Redis.
 
@@ -60,7 +60,7 @@ class RedisManager:
         return new_memory_dict
 
     def set_memory_dict(
-        self: "RedisManager", memory_dict: dict, expire_time: int | None = None
+        self, memory_dict: dict, expire_time: int | None = None
     ) -> None:
         """
         Set memory dictionary with optional expiration.
@@ -89,31 +89,11 @@ class RedisManager:
 
             self.memory_dict = new_memory_dict
 
-            # Force save to disk if this is persistent data
-            if expire_time is None:
-                self.force_save()
-
         except Exception as e:
             logger.warning(f"Erro para atualizar a memória: {e}")
 
-    def force_save(self: "RedisManager") -> bool:
-        """Force Redis to save data to disk."""
-        try:
-            return self.redis.save()
-        except Exception as e:
-            logger.error(f"Error forcing save to disk: {e}")
-            return False
 
-    def get_last_save_time(self: "RedisManager") -> datetime | None:
-        """Get the timestamp of the last successful save to disk."""
-        try:
-            timestamp = self.redis.lastsave()
-            return datetime.fromtimestamp(timestamp)
-        except Exception as e:
-            logger.error(f"Error getting last save time: {e}")
-            return None
-
-    def reset_memory_dict(self: "RedisManager") -> None:
+    def reset_memory_dict(self) -> None:
         """Clear the memory dictionary."""
         self.redis.delete(self.id)
 
