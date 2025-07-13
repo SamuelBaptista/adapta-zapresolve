@@ -1,21 +1,9 @@
 [project]
 name = "adapta-zapresolve"
 version = "0.1.0"
-description = "ZapResolve - Intelligent WhatsApp Customer Support System for Porto Seguro"
+description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
-authors = [
-    {name = "ZapResolve Team", email = "team@zapresolve.com"},
-]
-keywords = ["whatsapp", "customer-service", "ai", "chatbot", "porto-seguro"]
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Developers",
-    "Topic :: Communications :: Chat",
-    "Topic :: Software Development :: Libraries :: Python Modules",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.12",
-]
 dependencies = [
     "fastapi>=0.116.1",
     "ngrok==1.4.0",
@@ -23,100 +11,4 @@ dependencies = [
     "redis>=6.2.0",
     "repenseai>=4.0.14",
     "uvicorn>=0.35.0",
-    "requests>=2.31.0",
-    "pillow>=10.0.0",
-    "pydantic>=2.0.0",
-]
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
-    "black>=23.0.0",
-    "flake8>=6.0.0",
-    "mypy>=1.0.0",
-    "pre-commit>=3.0.0",
-]
-test = [
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-cov>=4.0.0",
-    "httpx>=0.24.0",
-]
-
-[project.urls]
-Homepage = "https://github.com/your-username/adapta-zapresolve"
-Repository = "https://github.com/your-username/adapta-zapresolve"
-Documentation = "https://docs.zapresolve.com"
-"Bug Tracker" = "https://github.com/your-username/adapta-zapresolve/issues"
-
-[project.scripts]
-zapresolve = "app:main"
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.uv]
-dev-dependencies = [
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
-    "black>=23.0.0",
-    "flake8>=6.0.0",
-    "mypy>=1.0.0",
-    "pre-commit>=3.0.0",
-]
-
-[tool.black]
-line-length = 100
-target-version = ['py312']
-include = '\.pyi?$'
-extend-exclude = '''
-/(
-  # directories
-  \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | build
-  | dist
-)/
-'''
-
-[tool.mypy]
-python_version = "3.12"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-check_untyped_defs = true
-disallow_untyped_decorators = true
-no_implicit_optional = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-warn_no_return = true
-warn_unreachable = true
-strict_equality = true
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py", "*_test.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-addopts = [
-    "--strict-markers",
-    "--strict-config",
-    "--verbose",
-    "--tb=short",
-    "--cov=wpp",
-    "--cov-report=term-missing",
-    "--cov-report=html",
-    "--cov-report=xml",
-]
-markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "integration: marks tests as integration tests",
-    "unit: marks tests as unit tests",
 ]
