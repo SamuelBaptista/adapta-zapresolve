@@ -73,7 +73,7 @@ class RedisManager:
             new_memory_dict = {}
 
             for k, v in memory_dict.items():
-                if isinstance(v, (list | dict)):
+                if isinstance(v, (list, dict)):
                     new_memory_dict[k] = json.dumps(v, default=self.convert_types)
                 else:
                     new_memory_dict[k] = str(v)
@@ -108,5 +108,7 @@ class RedisManager:
         Returns:
             The converted number or the original value if no conversion needed
         """
-        if isinstance(number, (np.int64 | np.float64)):
+        if hasattr(number, 'item') and hasattr(number, 'dtype'):
+            # Handle numpy types
             return number.item()
+        return number
