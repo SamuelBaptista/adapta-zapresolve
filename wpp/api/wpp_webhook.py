@@ -2,6 +2,7 @@ import requests
 import pdf2image
 import io
 import base64
+import logging
 
 from PIL import Image
 
@@ -16,7 +17,7 @@ from wpp.memory import RedisManager
 
 import redis
 
-
+logger = logging.getLogger(__name__)
 
 class UserWppWebhook:
     def __init__(
@@ -261,23 +262,36 @@ class UserWppWebhook:
 
         response = workflow.run(self.user_input)
 
-        logs = {
-            "user_input": self.user_input.get('text', ""),
-            "intention": response.get("intention", ""),
-            "user_history": response.get("user_history", ""),
-        }
-
-
-        if "wpp_image" in response:
+        # Handle None response or missing output
+        if not response or not response.get('output'):
             return {
-                "type": "image", 
-                "image": response['output_image'], 
-                "message": ""
+                "type": "message", 
+                "message": "Ocorreu um erro interno. Por favor, tente novamente."
+            }
+
+        output = response['output']
+
+        if output.get("validation_status") == "error":
+            return {
+                "type": "message", 
+                "message": "Não foi possível processar a requisição. Por favor, verifique se o assunto está relacionado a Porto Seguro e tente novamente."
+            }
+        
+        if output.get("validation_status") == "follow-up":
+            return {
+                "type": "message", 
+                "message": output.get('mensagem', 'Por favor, forneça mais informações.')
+            }
+
+        if output.get("validation_status") == "ok":
+            return {
+                "type": "message", 
+                "message": "Ok! Estamos processando sua requisição. Por favor, aguarde um momento."
             }
         
         return {
             "type": "message", 
-            "message": response['output']
+            "message": "ERRO!"
         }
 
     def process_event(self, workflow: Workflow):
@@ -290,6 +304,7 @@ class UserWppWebhook:
         }
 
         response = self._process_wpp_message(workflow)
+        logger.info(response)
 
         if response:
             response['number'] = self.data.phone

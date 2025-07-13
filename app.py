@@ -2,10 +2,7 @@ import ngrok
 import os
 import redis
 
-from functools import lru_cache
-from contextlib import asynccontextmanager
-
-from fastapi import FastAPI, Request, Depends
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from wpp.api.wpp_message import WppMessage
@@ -13,12 +10,7 @@ from wpp.api.wpp_webhook import UserWppWebhook
 
 from wpp.memory import RedisManager
 
-from repenseai.genai.tasks.workflow import Workflow
-
-
-workflow = Workflow([
-    [lambda x: "sucesso", "output"],
-])
+from wpp.genai.workflows.step1 import step1_workflow
 
 
 app = FastAPI()
@@ -59,7 +51,7 @@ async def recieve_wpp_message(
         return JSONResponse("Group messages are not supported", status_code=400)
     
     hook = UserWppWebhook(data, redis_client, wpp)
-    hook.process_event(workflow)
+    hook.process_event(step1_workflow)
 
     redis_manager.redis.set(message_id, "1", ex=60)
     return JSONResponse("Mensagem processada com sucesso!", status_code=200)
