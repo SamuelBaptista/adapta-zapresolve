@@ -9,11 +9,6 @@ class Text(BaseModel):
     url: Optional[str] = None
     thumbnailUrl: Optional[str] = None
 
-class Reaction(BaseModel):
-    value: str
-    time: int
-    reactionBy: str
-    referencedMessage: dict
 
 class ButtonReply(BaseModel):
     buttonId: str
@@ -24,10 +19,12 @@ class ButtonResponse(BaseModel):
     buttonId: str
     message: str
 
+
 class ListResponse(BaseModel):
+    listType: str
+    multipleSelection: bool
     message: str
-    title: str
-    selectedRowId: str
+
 
 class Image(BaseModel):
     mimeType: str
@@ -45,42 +42,56 @@ class Audio(BaseModel):
     mimeType: str
     viewOnce: bool
 
+
 class Video(BaseModel):
-    videoUrl: str
-    caption: str
     mimeType: str
-    seconds: int
+    videoUrl: str
+    thumbnailUrl: str
+    caption: str
+    width: int
+    height: int
     viewOnce: bool
 
-class Contact(BaseModel):
-    displayName: str
-    vCard: str
-    phones: List[str]
 
 class Document(BaseModel):
-    documentUrl: str
     mimeType: str
-    title: str
-    pageCount: int
+    documentUrl: str
+    thumbnailUrl: str
+    caption: str
     fileName: str
-    caption: Optional[str] = ""
+    pageCount: int
+    title: str
+
+
+class Contact(BaseModel):
+    name: str
+    phone: str
+
 
 class Location(BaseModel):
-    longitude: float
     latitude: float
-    address: str
-    url: str
+    longitude: float
+
 
 class Sticker(BaseModel):
-    stickerUrl: str
     mimeType: str
+    stickerUrl: str
+    thumbnailUrl: str
+    width: int
+    height: int
+
+
+class Reaction(BaseModel):
+    value: str
+    referencedMessage: Optional[dict] = None
+
 
 class Payment(BaseModel):
-    receiverPhone: str
     value: int
     currencyCode: str
     status: str
     transactionStatus: str
+
 
 class Product(BaseModel):
     quantity: int
@@ -102,7 +113,85 @@ class Order(BaseModel):
     total: int
     subTotal: int
     products: List[Product]
+
+
+# New models for incoming interactive messages
+class InteractiveButton(BaseModel):
+    id: str
+    title: str
+    type: Optional[str] = None
+
+class InteractiveSection(BaseModel):
+    title: str
+    rows: List[dict]
+
+class InteractiveAction(BaseModel):
+    buttons: Optional[List[InteractiveButton]] = None
+    sections: Optional[List[InteractiveSection]] = None
+
+class InteractiveHeader(BaseModel):
+    type: str  # text, image, video, document
+    text: Optional[str] = None
+    image: Optional[str] = None
+    video: Optional[str] = None
+    document: Optional[str] = None
+
+class InteractiveBody(BaseModel):
+    text: str
+
+class InteractiveFooter(BaseModel):
+    text: str
+
+# New model for list reply responses
+class ListReply(BaseModel):
+    id: str
+    title: str
+    description: Optional[str] = None
+
+# New model for interactive button reply responses (hydrated buttons)
+class InteractiveButtonReply(BaseModel):
+    id: str
+    title: str
+    payload: Optional[str] = None
+
+# New models for List Messages (different from interactive lists)
+class ListMessageOption(BaseModel):
+    title: str
+    description: str
+    rowId: str
+
+class ListMessageSection(BaseModel):
+    title: Optional[str] = None
+    options: List[ListMessageOption]
+
+class ListMessage(BaseModel):
+    description: str
+    footerText: Optional[str] = None
+    title: Optional[str] = None
+    buttonText: str
+    sections: List[ListMessageSection]
+
+class Interactive(BaseModel):
+    type: str  # button, list, list_reply, etc.
+    header: Optional[InteractiveHeader] = None
+    body: Optional[InteractiveBody] = None
+    footer: Optional[InteractiveFooter] = None
+    action: Optional[InteractiveAction] = None
+    # New field for list reply responses
+    list_reply: Optional[ListReply] = None
     
+    # Additional fields for other interactive message types
+    button: Optional[str] = None  # For simple button text
+    title: Optional[str] = None   # For message title
+    description: Optional[str] = None  # For message description
+    
+    # Button reply response (when user clicks a button - hydrated buttons)
+    button_reply: Optional[InteractiveButtonReply] = None
+    
+    # Allow any additional fields that we might not know about
+    class Config:
+        extra = "allow"
+
 
 class WppPayload(BaseModel):
     isStatusReply: bool
@@ -142,36 +231,44 @@ class WppPayload(BaseModel):
     reaction: Optional[Reaction] = None
     payment: Optional[Payment] = None
     order: Optional[Order] = None
+    # New field for incoming interactive messages
+    interactive: Optional[Interactive] = None
+    # New field for list messages (different from interactive lists)  
+    listMessage: Optional[ListMessage] = None
 
     
     def get_payload_type(self) -> str:
-        if self.text is not None:
+        if self.text and self.text.message:
             return "text"
-        elif self.image is not None:
+        elif self.image:
             return "image"
-        elif self.audio is not None:
+        elif self.audio:
             return "audio"
-        elif self.video is not None:
+        elif self.video:
             return "video"
-        elif self.contact is not None:
-            return "contact"
-        elif self.document is not None:
+        elif self.document:
             return "document"
-        elif self.location is not None:
+        elif self.location:
             return "location"
-        elif self.sticker is not None:
+        elif self.contact:
+            return "contact"
+        elif self.sticker:
             return "sticker"
-        elif self.listResponseMessage is not None:
-            return "listResponseMessage"
-        elif self.buttonsResponseMessage is not None:
-            return "buttonsResponseMessage"
-        elif self.reaction is not None:
+        elif self.reaction:
             return "reaction"
-        elif self.payment is not None:
+        elif self.payment:
             return "payment"
-        elif self.order is not None:
+        elif self.order:
             return "order"
-        elif self.buttonReply is not None:
+        elif self.listResponseMessage:
+            return "listResponseMessage"
+        elif self.buttonsResponseMessage:
+            return "buttonsResponseMessage"
+        elif self.buttonReply:
             return "buttonReply"
+        elif self.interactive:
+            return "interactive"
+        elif self.listMessage:
+            return "listMessage"
         else:
             return "unknown"

@@ -1,8 +1,8 @@
 import asyncio
 import json
 import logging
-import time
-from typing import Dict, List, Optional, Any, Union
+
+from typing import Dict, List, Optional
 from datetime import datetime
 
 import redis
@@ -251,6 +251,121 @@ def extract_user_input(message_data: dict, redis_client: redis.Redis, wpp: WppMe
                 "mime_type": webhook.data.document.mimeType,
                 "title": webhook.data.document.title,
             }
+        elif message_type == "buttonsResponseMessage" and webhook.data.buttonsResponseMessage:
+            return {
+                "text": webhook.data.buttonsResponseMessage.message,
+                "button_id": webhook.data.buttonsResponseMessage.buttonId,
+                "button_type": "list",
+            }
+        elif message_type == "buttonReply" and webhook.data.buttonReply:
+            return {
+                "text": webhook.data.buttonReply.message,
+                "button_id": webhook.data.buttonReply.buttonId,
+                "button_type": "action",
+            }
+        elif message_type == "interactive" and webhook.data.interactive:
+            # Handle list reply (user selection from a list/radio selection)
+            if webhook.data.interactive.type == "list_reply" and webhook.data.interactive.list_reply:
+                selection_text = f"Seleção da lista: {webhook.data.interactive.list_reply.title}"
+                if webhook.data.interactive.list_reply.description:
+                    selection_text += f" - {webhook.data.interactive.list_reply.description}"
+                selection_text += f" (ID: {webhook.data.interactive.list_reply.id})"
+                
+                return {
+                    "text": selection_text,
+                    "interactive_type": "list_reply",
+                    "message_type": "list_selection",
+                    "selected_id": webhook.data.interactive.list_reply.id,
+                    "selected_title": webhook.data.interactive.list_reply.title,
+                    "selected_description": webhook.data.interactive.list_reply.description or "",
+                }
+            else:
+                # Handle incoming interactive messages from other bots
+                interactive_text = ""
+                if webhook.data.interactive.body and webhook.data.interactive.body.text:
+                    interactive_text = webhook.data.interactive.body.text
+                
+                buttons = []
+                if webhook.data.interactive.action and webhook.data.interactive.action.buttons:
+                    for button in webhook.data.interactive.action.buttons:
+                        buttons.append({
+                            "id": button.id or "",
+                            "title": button.title or "",
+                            "type": button.type or ""
+                        })
+                
+                sections = []
+                if webhook.data.interactive.action and webhook.data.interactive.action.sections:
+                    for section in webhook.data.interactive.action.sections:
+                        sections.append({
+                            "title": section.title or "",
+                            "rows": section.rows or []
+                        })
+                
+                return {
+                    "text": interactive_text,
+                    "interactive_type": webhook.data.interactive.type or "",
+                    "message_type": "interactive_incoming",
+                    "buttons": buttons,
+                    "sections": sections
+                }
+        elif message_type == "listMessage" and webhook.data.listMessage:
+            # Handle list messages with sections and options
+            text_parts = []
+            
+            # Add main description
+            if webhook.data.listMessage.description:
+                text_parts.append(f"MENSAGEM: {webhook.data.listMessage.description}")
+            
+            # Add title if present
+            if webhook.data.listMessage.title:
+                text_parts.append(f"TÍTULO: {webhook.data.listMessage.title}")
+            
+            # Add button text
+            if webhook.data.listMessage.buttonText:
+                text_parts.append(f"BOTÃO: {webhook.data.listMessage.buttonText}")
+            
+            # Add footer if present
+            if webhook.data.listMessage.footerText:
+                text_parts.append(f"RODAPÉ: {webhook.data.listMessage.footerText}")
+            
+            # Process sections and options
+            if webhook.data.listMessage.sections:
+                options_text = []
+                for section in webhook.data.listMessage.sections:
+                    if section.title:
+                        options_text.append(f"SEÇÃO: {section.title}")
+                    
+                    for option in section.options:
+                        option_text = f"[{option.title}]({option.rowId})"
+                        if option.description:
+                            option_text += f" - {option.description}"
+                        options_text.append(option_text)
+                
+                if options_text:
+                    text_parts.append(f"OPÇÕES: {', '.join(options_text)}")
+            
+            # Combine all parts into single text field
+            full_text = " | ".join(text_parts) if text_parts else ""
+            
+            return {
+                "text": full_text,
+                "message_type": "list_message_incoming",
+                "sections": [
+                    {
+                        "title": section.title,
+                        "options": [
+                            {
+                                "title": option.title,
+                                "description": option.description,
+                                "rowId": option.rowId
+                            }
+                            for option in section.options
+                        ]
+                    }
+                    for section in webhook.data.listMessage.sections
+                ]
+            }
         else:
             return {"text": ""}
             
@@ -298,7 +413,7 @@ class CombinedMessageProcessor:
                     
                     # Handle special messages (images, documents, etc.)
                     webhook = UserWppWebhook(msg_data, self.redis_client, self.wpp)
-                    if webhook.message_type in ["image", "document", "audio", "video"]:
+                    if webhook.message_type in ["image", "document", "audio", "video", "buttonsResponseMessage", "buttonReply", "interactive", "listMessage"]:
                         special_messages.append({
                             "type": webhook.message_type,
                             "input": user_input,
@@ -338,11 +453,19 @@ class CombinedMessageProcessor:
             first_msg["text"] = {"message": combined_text}
             first_msg["type"] = "text"
             
+            # Ensure phone number is preserved in the message
+            if "phone" not in first_msg:
+                first_msg["phone"] = self.phone
+            
             # Create webhook processor
             webhook = UserWppWebhook(first_msg, self.redis_client, self.wpp)
             
             # Process the combined message
             response = webhook._process_wpp_message()
+            
+            # Sync shared conversation data after processing
+            if hasattr(webhook, 'cache') and webhook.cache:
+                webhook.cache.set_memory_dict(webhook.memory)
             
             # Send response if available
             if response:

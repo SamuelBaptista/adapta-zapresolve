@@ -67,6 +67,7 @@ async def recieve_wpp_message(
         return JSONResponse("Permission Denied", status_code=403)
     
     data = await request.json()
+    logger.info(f"Received webhook data: {data}")
 
     # Handle revoked messages
     if data.get('notification') == "REVOKE":
@@ -85,6 +86,7 @@ async def recieve_wpp_message(
     
     # Extract phone number
     phone = data.get("phone")
+    
     if not phone:
         return JSONResponse("Phone number required", status_code=400)
 
